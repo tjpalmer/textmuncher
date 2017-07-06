@@ -1,3 +1,35 @@
+def build_network(*, seqs):
+    from keras.layers.embeddings import Embedding
+    from keras.layers.recurrent import GRU
+    from keras.models import Sequential
+    from keras.utils import to_categorical
+    from numpy.random import choice
+    model = Sequential()
+    model.add(Embedding(input_dim=128, output_dim=4))
+    model.add(GRU(activation='softmax', units=128))
+    model.compile(
+        loss='categorical_crossentropy', metrics=['accuracy'], optimizer='adam')
+    train = seqs[choice(a=len(seqs), replace=False, size=int(1e4))]
+    train_x = train[:, :-1]
+    train_y = to_categorical(num_classes=128, y=train[:, -1])
+    print('about to train')
+    model.fit(x=train_x, y=train_y, epochs=1)
+    # Save the model.
+    from datetime import datetime
+    from os import makedirs
+    from os.path import join
+    now = datetime.now()
+    time = now.strftime('%Y%m%d-%H%M%S')
+    dir_name = join('notes', 'models')
+    makedirs(dir_name, exist_ok=True)
+    out_name = join(dir_name, f'seq-{time}.keras.h5')
+    model.save(out_name)
+    print(f'model saved to {out_name}')
+    # for i in range(1000):
+    #     model.train_on_batch(x=)
+    return model
+
+
 def load_text(name):
     from numpy import fromiter, int8
     from unidecode import unidecode
@@ -12,14 +44,18 @@ def load_text(name):
 def main():
     from argparse import ArgumentParser
     parser = ArgumentParser()
+    parser.add_argument('--model')
     parser.add_argument('--source')
     args = parser.parse_args()
+    if args.source:
     text = load_text(args.source)
-    from numpy import bincount
-    # print(bincount(text))
-    # return
-    seqs = ngramify(seq=text, n=50)
+    if False:
+        from numpy import bincount
+        print(bincount(text))
+    seqs = ngramify(seq=text, n=65)
     print(seqs.shape)
+    build_network(seqs=seqs)
+
 
 def ngramify(*, seq, n):
     from numpy import arange
