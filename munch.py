@@ -9,7 +9,7 @@ def build_network(*, seqs):
     model.add(GRU(activation='softmax', units=128))
     model.compile(
         loss='categorical_crossentropy', metrics=['accuracy'], optimizer='adam')
-    train = seqs[choice(a=len(seqs), replace=False, size=int(1e4))]
+    train = seqs[choice(a=len(seqs), replace=True, size=int(1e6))]
     train_x = train[:, :-1]
     train_y = to_categorical(num_classes=128, y=train[:, -1])
     print('about to train')
@@ -64,7 +64,7 @@ def main():
     if False:
         from numpy import bincount
         print(bincount(text))
-    seqs = ngramify(seq=text, n=65)
+    seqs = ngramify(seq=text, n=11)
     print(seqs.shape)
     if args.model:
         from keras.models import load_model
