@@ -18,22 +18,17 @@ def main():
     from numpy import bincount
     # print(bincount(text))
     # return
-    # ngramify(seq=text, n=50)
-    ngramify2(seq=text, n=50)
+    seqs = ngramify(seq=text, n=50)
+    print(seqs.shape)
 
 def ngramify(*, seq, n):
-    from numpy import vstack
-    ngrams = vstack(zip(*[seq[i:] for i in range(n)]))
-    print(ngrams.shape)
-
-def ngramify2(*, seq, n):
     from numpy import arange
     count = len(seq) - n + 1
     if count < 1:
         ngrams = seq[:0]
     else:
         ngrams = seq[arange(n)[None, :] + arange(count)[:, None]]
-    print(ngrams.shape)
+    return ngrams
 
 if __name__ == '__main__':
     main()
