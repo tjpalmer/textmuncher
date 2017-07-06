@@ -30,6 +30,19 @@ def build_network(*, seqs):
     return model
 
 
+def infer(*, model, seqs):
+    from numpy.random import choice
+    for index in choice(a=len(seqs), replace=False, size=30):
+        x = seqs[index][:-1]
+        y = seqs[index][-1]
+        probs = model.predict(x.reshape([1, -1]))[0]
+        tops = probs.argsort()[::-1][:10]
+        tops = ''.join(chr(_) for _ in tops)
+        start = ''.join(chr(_) for _ in x)
+        expected = chr(y)
+        print(' -- '.join(repr(_) for _ in [start, expected, tops]))
+
+
 def load_text(name):
     from numpy import fromiter, int8
     from unidecode import unidecode
@@ -47,14 +60,18 @@ def main():
     parser.add_argument('--model')
     parser.add_argument('--source')
     args = parser.parse_args()
-    if args.source:
     text = load_text(args.source)
     if False:
         from numpy import bincount
         print(bincount(text))
     seqs = ngramify(seq=text, n=65)
     print(seqs.shape)
-    build_network(seqs=seqs)
+    if args.model:
+        from keras.models import load_model
+        model = load_model(args.model)
+    else:
+        model = build_network(seqs=seqs)
+    infer(model=model, seqs=seqs)
 
 
 def ngramify(*, seq, n):
@@ -65,6 +82,7 @@ def ngramify(*, seq, n):
     else:
         ngrams = seq[arange(n)[None, :] + arange(count)[:, None]]
     return ngrams
+
 
 if __name__ == '__main__':
     main()
