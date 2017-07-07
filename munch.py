@@ -5,7 +5,8 @@ def build_network(*, seqs):
     from keras.utils import to_categorical
     from numpy.random import choice
     model = Sequential()
-    model.add(Embedding(input_dim=128, output_dim=4))
+    model.add(Embedding(input_dim=128, output_dim=2))
+    model.add(GRU(return_sequences=True, units=32))
     model.add(GRU(activation='softmax', units=128))
     model.compile(
         loss='categorical_crossentropy', metrics=['accuracy'], optimizer='adam')
@@ -14,7 +15,7 @@ def build_network(*, seqs):
     train_x = train[:, :-1]
     train_y = to_categorical(num_classes=128, y=train[:, -1])
     print('about to train')
-    model.fit(x=train_x, y=train_y, epochs=5)
+    model.fit(x=train_x, y=train_y, epochs=2)
     # Save the model.
     from datetime import datetime
     from os import makedirs
