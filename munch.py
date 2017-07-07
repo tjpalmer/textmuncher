@@ -1,7 +1,48 @@
+class TextModel:
+
+    def sample(self, text):
+        from numpy.random import choice
+        probs = self.probs(text)
+        result = choice(a=len(probs), p=probs)
+        return chr(result)
+
+
+class KerasTextModel:
+
+    def __init__(self, *, model):
+        self.model = model
+
+    def probs(self, text):
+        from numpy import fromiter, int8
+        text = fromiter((ord(_) for _ in text), dtype=int8)
+        probs = self.model.predict(text.reshape([1, -1]))[0]
+        return probs
+
+
+class TableTextModel:
+
+    def __init__(self, *, table):
+        self.table = table
+
+    def probs(self, text):
+        probs = self.table
+        # print(self.table.shape)
+        nkey = self.table.ndim - 1
+        # print(nkey)
+        if nkey:
+            keys = text[-nkey:]
+            # print(keys)
+            for key in keys:
+                # print(key, ord(key))
+                probs = probs[ord(key)]
+        return probs
+
+
 def build_network(*, seqs):
     from keras.layers.embeddings import Embedding
     from keras.layers.recurrent import GRU
     from keras.models import Sequential
+    from keras.optimizers import Adam
     from keras.utils import to_categorical
     from numpy.random import choice
     model = Sequential()
@@ -9,7 +50,9 @@ def build_network(*, seqs):
     model.add(GRU(return_sequences=True, units=32))
     model.add(GRU(activation='softmax', units=128))
     model.compile(
-        loss='categorical_crossentropy', metrics=['accuracy'], optimizer='adam')
+        loss='categorical_crossentropy',
+        metrics=['accuracy'],
+        optimizer=Adam(decay=1e-8, lr=1e-2))
     # train = seqs[choice(a=len(seqs), replace=False, size=int(1e6))]
     train = seqs[:int(len(seqs) * 0.6)]
     train_x = train[:, :-1]
@@ -41,12 +84,17 @@ def hack_step(*, seq):
     counts = vstack(
         bincount(pairs[pairs[:, 0] == code, 1], minlength=128)
         for code in range(128))
+    counts = counts.astype(float) / counts.sum(axis=1, keepdims=True)
     model = counts.argmax(axis=1)
     predictions = model[pairs[:, 0]]
     accuracy = (predictions == pairs[:, 1]).mean()
     # Report.
     print(f'baseline accuracy: {constant_accuracy} or {accuracy}')
     print(len(seq))
+    # Look some at generation.
+    tm = TableTextModel(table=counts)
+    probs = tm.probs('Wha')
+    print(sum(probs), chr(probs.argmax()))
 
 
 def infer(*, model, seqs):
@@ -92,6 +140,7 @@ def main():
     if True:
         # Show baselines.
         hack_step(seq=text)
+        return
     # Now work with a network.
     seqs = ngramify(seq=text, n=11)
     print(seqs.shape)
