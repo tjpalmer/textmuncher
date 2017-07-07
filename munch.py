@@ -1,5 +1,11 @@
 class TextModel:
 
+    def predict(self, text):
+        from numpy.random import choice
+        probs = self.probs(text)
+        result = probs.argmax()
+        return chr(result)
+
     def sample(self, text):
         from numpy.random import choice
         probs = self.probs(text)
