@@ -9,11 +9,12 @@ def build_network(*, seqs):
     model.add(GRU(activation='softmax', units=128))
     model.compile(
         loss='categorical_crossentropy', metrics=['accuracy'], optimizer='adam')
-    train = seqs[choice(a=len(seqs), replace=True, size=int(1e6))]
+    # train = seqs[choice(a=len(seqs), replace=False, size=int(1e6))]
+    train = seqs[:int(len(seqs) * 0.6)]
     train_x = train[:, :-1]
     train_y = to_categorical(num_classes=128, y=train[:, -1])
     print('about to train')
-    model.fit(x=train_x, y=train_y, epochs=1)
+    model.fit(x=train_x, y=train_y, epochs=5)
     # Save the model.
     from datetime import datetime
     from os import makedirs
@@ -28,6 +29,23 @@ def build_network(*, seqs):
     # for i in range(1000):
     #     model.train_on_batch(x=)
     return model
+
+
+def hack_step(*, seq):
+    from numpy import bincount, vstack
+    # Model that always predicts most common.
+    constant_accuracy = bincount(seq).max() / len(seq)
+    # Model that predicts from single step.
+    pairs = ngramify(n=2, seq=seq)
+    counts = vstack(
+        bincount(pairs[pairs[:, 0] == code, 1], minlength=128)
+        for code in range(128))
+    model = counts.argmax(axis=1)
+    predictions = model[pairs[:, 0]]
+    accuracy = (predictions == pairs[:, 1]).mean()
+    # Report.
+    print(f'baseline accuracy: {constant_accuracy} or {accuracy}')
+    print(len(seq))
 
 
 def infer(*, model, seqs):
@@ -50,7 +68,13 @@ def load_text(name):
         text = source_file.read()
     # Chop first off in case of byte order junk.
     text = text[1:]
+    # Change to ascii.
     text = unidecode(text)
+    # Unwrap newlines, presuming blank lines between paragraphs and no crs.
+    text = (text.
+        replace('\r', '').replace('\n\n', '\r').replace('\n', ' ').
+        replace('\r', '\n'))
+    # Make an array.
     text = fromiter((ord(_) for _ in text), dtype=int8)
     return text
 
@@ -64,6 +88,10 @@ def main():
     if False:
         from numpy import bincount
         print(bincount(text))
+    if True:
+        # Show baselines.
+        hack_step(seq=text)
+    # Now work with a network.
     seqs = ngramify(seq=text, n=11)
     print(seqs.shape)
     if args.model:
