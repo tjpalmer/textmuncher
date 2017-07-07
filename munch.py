@@ -7,7 +7,7 @@ class TextModel:
         return chr(result)
 
 
-class KerasTextModel:
+class KerasTextModel(TextModel):
 
     def __init__(self, *, model):
         self.model = model
@@ -16,10 +16,12 @@ class KerasTextModel:
         from numpy import fromiter, int8
         text = fromiter((ord(_) for _ in text), dtype=int8)
         probs = self.model.predict(text.reshape([1, -1]))[0]
+        # print(probs.sum())
+        probs /= probs.sum()
         return probs
 
 
-class TableTextModel:
+class TableTextModel(TextModel):
 
     def __init__(self, *, table):
         self.table = table
@@ -75,6 +77,13 @@ def build_network(*, seqs):
     return model
 
 
+def gen_text(*, seed, tm):
+    message = seed
+    for _ in range(1000):
+        message += tm.sample(message[-10:])
+    print(message)
+
+
 def hack_step(*, seq):
     from numpy import bincount, vstack
     # Model that always predicts most common.
@@ -93,8 +102,8 @@ def hack_step(*, seq):
     print(len(seq))
     # Look some at generation.
     tm = TableTextModel(table=counts)
-    probs = tm.probs('Wha')
-    print(sum(probs), chr(probs.argmax()))
+    gen_text(seed='Wha', tm=tm)
+    # print(sum(probs), chr(probs.argmax()))
 
 
 def infer(*, model, seqs):
@@ -127,6 +136,7 @@ def load_text(name):
     text = fromiter((ord(_) for _ in text), dtype=int8)
     return text
 
+
 def main():
     from argparse import ArgumentParser
     parser = ArgumentParser()
@@ -140,7 +150,7 @@ def main():
     if True:
         # Show baselines.
         hack_step(seq=text)
-        return
+        # return
     # Now work with a network.
     seqs = ngramify(seq=text, n=11)
     print(seqs.shape)
@@ -150,6 +160,8 @@ def main():
     else:
         model = build_network(seqs=seqs)
     infer(model=model, seqs=seqs)
+    tm = KerasTextModel(model=model)
+    gen_text(seed='Wha', tm=tm)
 
 
 def ngramify(*, seq, n):
