@@ -6,6 +6,10 @@ class TextModel:
         result = probs.argmax()
         return chr(result)
 
+    def probs(self, text):
+        weights = self.weights(text)
+        return weights / weights.sum()
+
     def sample(self, text):
         from numpy.random import choice
         probs = self.probs(text)
@@ -18,32 +22,30 @@ class KerasTextModel(TextModel):
     def __init__(self, *, model):
         self.model = model
 
-    def probs(self, text):
+    def weights(self, text):
         from numpy import fromiter, int8
         text = fromiter((ord(_) for _ in text), dtype=int8)
-        probs = self.model.predict(text.reshape([1, -1]))[0]
-        # print(probs.sum())
-        probs /= probs.sum()
-        return probs
+        weights = self.model.predict(text.reshape([1, -1]))[0]
+        # print(weights.sum())
+        return weights
 
 
 class TableTextModel(TextModel):
 
-    def __init__(self, *, table):
+    def __init__(self, *, nkey=None, table):
+        self.nkey = table.ndim - 1 if nkey is None else nkey
         self.table = table
 
-    def probs(self, text):
-        probs = self.table
+    def weights(self, text):
+        weights = self.table
         # print(self.table.shape)
-        nkey = self.table.ndim - 1
-        # print(nkey)
-        if nkey:
-            keys = text[-nkey:]
+        if self.nkey:
+            keys = text[-self.nkey:]
             # print(keys)
             for key in keys:
                 # print(key, ord(key))
-                probs = probs[ord(key)]
-        return probs
+                weights = weights[ord(key)]
+        return weights
 
 
 def build_network(*, seqs):
@@ -91,7 +93,7 @@ def gen_text(*, seed, tm):
 
 
 def hack_step(*, seq):
-    from numpy import bincount, vstack
+    from numpy import array, bincount, vstack
     # Model that always predicts most common.
     constant_accuracy = bincount(seq).max() / len(seq)
     # Model that predicts from single step.
@@ -99,17 +101,92 @@ def hack_step(*, seq):
     counts = vstack(
         bincount(pairs[pairs[:, 0] == code, 1], minlength=128)
         for code in range(128))
-    counts = counts.astype(float) / counts.sum(axis=1, keepdims=True)
-    model = counts.argmax(axis=1)
-    predictions = model[pairs[:, 0]]
-    accuracy = (predictions == pairs[:, 1]).mean()
+    counts2 = counts
+    counts_n1 = counts2
+    pairs2 = pairs
+    probs2 = counts.astype(float) / counts.sum(axis=1, keepdims=True)
     # Report.
+    model = counts2.argmax(axis=1)
+    predictions = model[pairs[:, 0]]
+    accuracy = (predictions == pairs2[:, 1]).mean()
     print(f'baseline accuracy: {constant_accuracy} or {accuracy}')
     print(len(seq))
     # Look some at generation.
-    tm = TableTextModel(table=counts)
+    tm = TableTextModel(table=probs2)
     gen_text(seed='Wha', tm=tm)
     # print(sum(probs), chr(probs.argmax()))
+    # 3-grams.
+    triples = ngramify(n=3, seq=seq)
+    counts3 = []
+    for start_code in range(128):
+        pairs = triples[triples[:, 0] == start_code, 1:]
+        counts = vstack(
+            bincount(pairs[pairs[:, 0] == code, 1], minlength=128)
+            for code in range(128))
+        counts3.append(counts)
+    counts3 = array(counts3)
+    counts_n2 = counts3
+    # print(counts3.shape)
+    # Report.
+    preds3 = counts3[triples[:, 0], triples[:, 1]].argmax(axis=1)
+    acc3 = (preds3 == triples[:, 2]).mean()
+    print(f'2-gram accuracy: {acc3}')
+    # Generate.
+    tm3 = TableTextModel(table=counts3.astype(float))
+    gen_text(seed='Wha', tm=tm3)
+    if False:
+        # 4-grams.
+        def incept():
+            from collections import defaultdict
+            return defaultdict(incept)
+        grams4 = ngramify(n=4, seq=seq)
+        counts4 = incept()
+        total = 0
+        for code0 in range(128):
+            grams3 = grams4[grams4[:, 0] == code0, 1:]
+            counts3 = incept()
+            for code1 in range(128):
+                grams2 = grams3[grams3[:, 0] == code1, 1:]
+                counts2 = incept()
+                for code2 in range(128):
+                    grams1 = grams2[grams2[:, 0] == code2, 1]
+                    if len(grams1):
+                        counts1 = bincount(grams1)
+                        total += (counts1 > 0).sum()
+                        counts2[code2] = counts1
+                if counts2:
+                    counts3[code1] = counts2
+            if counts3:
+                counts4[code0] = counts3
+        counts_n3 = counts4
+        print(f'done counting 3-gram probs, total {total}')
+        # Generate.
+        tm4 = TableTextModel(nkey=3, table=counts4)
+        gen_text(seed='Wha', tm=tm4)
+        # Report.
+        preds4 = []
+        for gram4 in grams4:
+            counts1 = counts4[gram4[0]][gram4[1]][gram4[2]]
+            preds4.append(counts1.argmax())
+        preds4 = array(preds4)
+        acc4 = (preds4 == grams4[:, 3]).mean()
+        print(f'3-gram accuracy: {acc4}')
+    # Save the models.
+    from datetime import datetime
+    from json import dump
+    from os import makedirs
+    from os.path import join
+    now = datetime.now()
+    time = now.strftime('%Y%m%d-%H%M%S')
+    dir_name = join('notes', 'models')
+    makedirs(dir_name, exist_ok=True)
+    name = join(dir_name, f'seq-{time}.ngram.json')
+    if False:
+        with open(name, 'w') as out_file:
+            dump(
+                default=lambda _: _.tolist(),
+                fp=out_file,
+                obj={'n1': counts_n1, 'n2': counts_n2, 'n3': counts_n3})
 
 
 def infer(*, model, seqs):
